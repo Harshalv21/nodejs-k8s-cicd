@@ -1,0 +1,121 @@
+📘 Node.js CI/CD Pipeline with Kubernetes (Minikube)
+This project shows a real DevOps workflow, built from zero:
+
+write a small Node.js app
+containerize it with Docker
+push the image to Docker Hub via GitHub Actions (CI)
+deploy it to Kubernetes (Minikube) via GitHub Actions (CD)
+access the app via a Kubernetes Service
+Because the cluster is local (Minikube), the deploy job runs on a self-hosted GitHub runner inside the same VM.
+
+🧱 Prerequisites
+A Linux VM (e.g., Ubuntu) — running inside VirtualBox is fine
+Docker, kubectl, Minikube installed on the VM
+Node.js 16+ (only for local testing/builds)
+A Docker Hub account
+A GitHub repository (this one)
+
+Confirm your tools:
+
+docker --version
+kubectl version --client
+minikube version
+node -v
+
+Project structure
+.
+├── .github/workflows/ci-cd.yml
+├── Dockerfile
+├── k8s/
+│   ├── deployment.yaml
+│   └── service.yaml
+├── app
+|   └── index.js
+|   └── package.json
+|   |__ server.js
+└── README.md
+
+# On your VM
+1] mkdir -p ~/projects && cd ~/projects
+git clone https://github.com/<your-gh-username>/nodejs-k8s-cicd.git
+cd nodejs-k8s-cicd
+#see if all files are there
+ls -la
+
+2] Minikube configuration (cluster setup)
+
+On the same VM:
+# Start minikube using Docker driver (inside your VM)
+minikube start --driver=docker
+
+# Confirm kubeconfig/context points to minikube
+kubectl config current-context
+# should be 'minikube'; if not:
+kubectl config use-context minikube
+
+# Sanity checks
+kubectl cluster-info
+kubectl get nodes
+
+Minikube automatically writes ~/.kube/config. The self-hosted runner will use this.
+
+3) Set up Docker Hub & GitHub Secrets
+
+In your GitHub repo → Settings → Secrets and variables → Actions → New repository secret:
+DOCKERHUB_USERNAME = your Docker Hub username (e.g., harshal2106)
+DOCKERHUB_TOKEN = a Docker Hub Access Token (Profile → Security → New Access Token)
+
+4] GitHub Actions workflow (CI + CD)
+
+Build job on GitHub’s ubuntu-latest (fast, free for public repos)
+Deploy job on your self-hosted runner in the VM (so it can reach Minikube)
+.github/workflows/ci-cd.yml
+
+5] Self-hosted GitHub runner (inside the VM)
+Because Minikube is local to your VM, the deploy job must run on that VM.
+In GitHub repo → Settings → Actions → Runners → New self-hosted runner
+Choose Linux x64 and follow the commands shown. Typical flow:
+
+# On the VM (do NOT put this inside your repo directory)
+cd ~
+mkdir actions-runner && cd actions-runner
+# Use the exact URL/version GitHub shows you:
+curl -o actions-runner-linux-x64.tar.gz -L https://github.com/actions/runner/releases/download/vX.Y.Z/actions-runner-linux-x64-X.Y.Z.tar.gz
+tar xzf actions-runner-linux-x64.tar.gz
+
+# Use the registration token from GitHub UI:
+./config.sh --url https://github.com/<your-gh-username>/nodejs-k8s-cicd --token <YOUR_TOKEN>
+#you will find token in settings-> Actions -> Runners -> New self-hosted runner
+
+# Test run (foreground)
+./run.sh
+
+# (Recommended) install as a service so it persists across reboots:
+sudo ./svc.sh install
+sudo ./svc.sh start
+sudo ./svc.sh status
+
+
+Confirm runner shows Online in Settings → Actions → Runners.
+The runner inherits ~/.kube/config, so kubectl in the deploy job will talk to Minikube.
+
+6] Trigger the pipeline
+
+Push a change to main:
+echo "// small change" >> app.js
+git add app.js
+git commit -m "Trigger pipeline"
+git push
+
+
+Build job: builds & pushes docker.io/<username>/nodejs-app:latest
+Deploy job (self-hosted): applies manifests, waits for rollout
+
+Check on the VM:
+kubectl get pods
+kubectl get svc
+minikube service nodejs-service --url
+# open the printed URL in your browser, e.g. http://192.168.49.2:30080
+
+👤 Author
+Harshal Vernekar
