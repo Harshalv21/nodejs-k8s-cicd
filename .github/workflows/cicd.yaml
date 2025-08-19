@@ -29,24 +29,18 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/nodejs-k8s-cicd:latest
 
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted   # 👈 run on your VBox VM
     needs: build
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: v1.30.0
-
-      - name: Configure Kubeconfig
+      - name: Deploy to Minikube
         run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
-
-      - name: Deploy to Kubernetes
-        run: |
+          echo "👉 Checking cluster info"
+          kubectl cluster-info
+          kubectl get nodes
+          echo "👉 Applying Kubernetes manifests"
           kubectl apply -f k8s/deployment.yaml
           kubectl apply -f k8s/service.yaml
           kubectl rollout status deployment/nodejs-app
